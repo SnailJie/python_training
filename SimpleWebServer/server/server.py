@@ -30,10 +30,9 @@ class RequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         self.wfile.write(page)
     '''
     
+    '''
+    # 读取本地路径的page文件
     def do_GET(self):
-        '''
-        读取本地路径的page文件
-        '''
         try:
             full_path = os.getcwd() + self.path
             if not os.path.exists(full_path):
@@ -53,7 +52,29 @@ class RequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             self.send_content(content)
         except IOError as msg:
             msg = "'{0}' can not be read:{1}".format(self.path,msg)
+    '''
     
+    #动态查找对应的处理程序
+    def do_GET(self):
+        try:
+            self.full_path = os.getcwd() + self.path
+            for case in self.Cases:
+                handler = case()
+                if handler.test(self):
+                    handler.act(self)
+                    break
+        except Exception as msg:
+            self.handle_error(msg)
+    
+    
+    
+    Cases = [case_no_file(),
+             case_existing_file(),
+             case_directory_index_file(),
+             case_always_fail()]
+    
+    
+        
     Error_Page = """\
         <html>
         <body>
@@ -88,4 +109,24 @@ if __name__ == '__main__':
     serverAddress = ('',8080)
     server = BaseHTTPServer.HTTPServer(serverAddress,RequestHandler)
     server.serve_forever()
+    
+
+class case_existing_file(object):
+    def test(self,handler):
+        return not os.path.exists(handler.full_path)
+    def act(self,handler):
+        raise ServerException("'{0}' not found".format(handler.path))
+class case_no_file(object):
+    def test(self, handler):
+        return os.path.isfile(handler.full_path)
+    def act(self, handler):
+        handler.handle_file(handler.full_path)
+class case_always_fail(object):
+    '''Base case if nothing else worked.'''
+    def test(self, handler):
+        return True
+    def act(self, handler):
+        raise ServerException("Unknown object '{0}'".format(handler.path))
+        
+
     
